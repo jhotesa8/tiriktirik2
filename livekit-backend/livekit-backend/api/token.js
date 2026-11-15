@@ -2,11 +2,12 @@
 import { AccessToken } from 'livekit-server-sdk';
 
 export default async function handler(req, res) {
-  // Permitir peticiones desde tu frontend (CORS)
+  // Cabeceras CORS manuales (respaldo)
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
+  // Responder a la petición de verificación (OPTIONS) para evitar el 404
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -16,28 +17,25 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Recibir datos del usuario y la sala desde el frontend
     const { identity, room } = req.body;
     if (!identity || !room) {
       return res.status(400).json({ error: 'Faltan identity o room' });
     }
 
-    // 2. Leer las credenciales desde las variables de entorno (NUNCA las pongas en el código)
     const apiKey = process.env.LIVEKIT_API_KEY;
     const apiSecret = process.env.LIVEKIT_API_SECRET;
-    const serverUrl = process.env.LIVEKIT_URL;
+    // Usar la URL de entorno de Vercel si está disponible
+    const serverUrl = process.env.LIVEKIT_URL || process.env.VERCEL_URL;
 
     if (!apiKey || !apiSecret || !serverUrl) {
       return res.status(500).json({ error: 'Faltan configurar las variables de entorno' });
     }
 
-    // 3. Crear el Token de acceso con una duración corta (ej. 15 minutos)
     const at = new AccessToken(apiKey, apiSecret, {
       identity: identity,
-      ttl: '15m', // El token expira rápido, el frontend pedirá uno nuevo si es necesario
+      ttl: '15m',
     });
 
-    // 4. Dar los permisos necesarios (entrar a la sala, publicar cámara/micrófono, etc.)
     at.addGrant({
       roomJoin: true,
       room: room,
@@ -46,7 +44,6 @@ export default async function handler(req, res) {
       canPublishData: true,
     });
 
-    // 5. Firmar y devolver el token
     const token = await at.toJwt();
     res.status(200).json({ token, url: serverUrl });
 
